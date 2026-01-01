@@ -17,6 +17,7 @@ RUN poetry install --only=main
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         wget \
+        curl \
         gnupg \
         ca-certificates && \
     apt-get clean && \
