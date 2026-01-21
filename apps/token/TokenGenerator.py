@@ -4,6 +4,8 @@ import os
 from fake_useragent import FakeUserAgent
 from playwright.sync_api import sync_playwright
 
+import settings
+
 
 class TokenGenerator:
     """
@@ -44,7 +46,13 @@ class TokenGenerator:
                 playwright_useragent = user_agent
             else:
                 playwright_useragent = FakeUserAgent().random
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(
+                headless=settings.PLAYWRIGHT_HEADLESS,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                ]
+            )
             context = browser.new_context(user_agent=playwright_useragent)
             page = context.new_page()
             page.goto(self.html_file_path)
