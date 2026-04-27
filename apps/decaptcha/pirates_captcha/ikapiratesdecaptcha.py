@@ -1,122 +1,79 @@
+"""
+Ikariam pirate-fortress captcha solver.
+
+Backed by a small CRNN (CNN + BiLSTM + CTC, ~1.66M params) trained on a
+mix of ~65k synthetic and ~11k pseudo-labeled real captchas. Beats the
+previous YOLOv8n model by 16 points of full-sequence accuracy on the
+original validation set with a smaller model file (6.4 MB vs 12 MB).
+
+Loaded via OpenCV's cv2.dnn — no new dependencies vs the previous
+implementation. Public API (`get_captcha_string`) is preserved.
+
+Model and training code: https://github.com/Mahrkeenerh/iKaptcha
+"""
+
 import os
 
-import cv2.dnn  # opencv-python-rolling==4.7.0.20230211
+import cv2.dnn
 import numpy as np
 
 current_directory = os.path.dirname(__file__)
-onnx_model = os.path.join(
-    current_directory, "yolov8n-ikariam-pirates-mAP-0_989.onnx"
-)  # path to neural network model
-
+onnx_model = os.path.join(current_directory, "ikaptcha.onnx")
 
 model: cv2.dnn.Net = cv2.dnn.readNetFromONNX(onnx_model)
-CLASSES = [
-    "B",
-    "2",
-    "D",
-    "X",
-    "5",
-    "M",
-    "W",
-    "A",
-    "7",
-    "4",
-    "N",
-    "L",
-    "P",
-    "V",
-    "J",
-    "H",
-    "C",
-    "3",
-    "U",
-    "Q",
-    "Y",
-    "S",
-    "T",
-    "K",
-    "R",
-    "E",
-    "G",
-    "F",
-]
+
+# 28-character vocabulary the captcha actually uses (the game server excludes
+# visually ambiguous glyphs: 0, 1, 6, 8, 9, I, O, Z). Index 0 is the CTC blank.
+CHARSET = "abcdefghjklmnpqrstuvwxy23457"
+BLANK = 0
+IDX_TO_CHAR = {i + 1: c for i, c in enumerate(CHARSET)}
+
+IMG_H, IMG_W = 48, 256
+MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32)
+STD = np.array([0.5, 0.5, 0.5], dtype=np.float32)
 
 
-def break_ikariam_pirate_captcha(input_image):
-    """Does inference on the input image. Returns list of all detected objects
+def _preprocess(file_bytes: bytes) -> np.ndarray:
+    """Decode -> resize 48x256 -> [-1, 1] normalize -> NCHW float32 batch."""
+    arr = np.frombuffer(file_bytes, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)        # BGR HxWx3
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = cv2.resize(img, (IMG_W, IMG_H), interpolation=cv2.INTER_LINEAR)
+    img = img.astype(np.float32) / 255.0
+    img = (img - MEAN) / STD
+    img = img.transpose(2, 0, 1)                     # CHW
+    return img[None, ...].astype(np.float32)         # NCHW
+
+
+def _greedy_ctc_decode(logits_tbc: np.ndarray) -> str:
+    """CTC greedy decode on (T, 1, C) logits — collapse repeats, drop blanks."""
+    indices = logits_tbc[:, 0, :].argmax(axis=1)     # (T,)
+    chars = []
+    prev = None
+    for idx in indices.tolist():
+        if idx != prev and idx != BLANK:
+            chars.append(IDX_TO_CHAR[idx])
+        prev = idx
+    return "".join(chars)
+
+
+def get_captcha_string(input_image) -> str:
+    """Run inference on the input image and return the captcha string.
+
     Parameters
     ----------
-    input_image : str
-        Captcha image file object
-
-    Returns
-    -------
-    detections : list
-        List of detections. Each detection object has fields class_id : int, class_name : str, confidence : float, scale : float, boxes : list
-        boxes is a list of 4 floats: left, top, width, height. For more information search for "YOLOv8" on the internet.
-    """
-    filestr = input_image.read()
-    assert len(filestr) <= 50000, "File is too large"  # 50Kb max
-    file_bytes = np.frombuffer(filestr, np.uint8)
-    original_image: np.ndarray = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    [height, width, _] = original_image.shape
-    assert height <= 100 and width <= 500, "Image is too large"
-    length = max((height, width))
-    image = np.zeros((length, length, 3), np.uint8)
-    image[0:height, 0:width] = original_image
-    scale = length / 640
-    blob = cv2.dnn.blobFromImage(
-        image, scalefactor=1 / 255, size=(640, 640), swapRB=True
-    )
-    model.setInput(blob)
-    outputs = model.forward()
-    outputs = np.array([cv2.transpose(outputs[0])])
-    rows = outputs.shape[1]
-    boxes = []
-    scores = []
-    class_ids = []
-    for i in range(rows):
-        classes_scores = outputs[0][i][4:]
-        (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
-            classes_scores
-        )
-        if maxScore >= 0.25:
-            box = [
-                outputs[0][i][0] - (0.5 * outputs[0][i][2]),
-                outputs[0][i][1] - (0.5 * outputs[0][i][3]),
-                outputs[0][i][2],
-                outputs[0][i][3],
-            ]
-            boxes.append(box)
-            scores.append(maxScore)
-            class_ids.append(maxClassIndex)
-    result_boxes = cv2.dnn.NMSBoxes(boxes, scores, 0.25, 0.45, 0.5)
-    detections = []
-    for i in range(len(result_boxes)):
-        index = result_boxes[i]
-        box = boxes[index]
-        detection = {
-            "class_id": class_ids[index],
-            "class_name": CLASSES[class_ids[index]],
-            "confidence": scores[index],
-            "box": box,
-            "scale": scale,
-        }
-        detections.append(detection)
-    detections.sort(key=lambda x: x["box"][0], reverse=False)
-    return detections
-
-
-def get_captcha_string(input_image):
-    """Does inference on the input image. Returns captcha string
-    Parameters
-    ----------
-    input_image : str
-        path to captcha image
+    input_image : file-like
+        Captcha image file object (anything with .read()).
 
     Returns
     -------
     captcha : str
-        Resulting string from inference on input_image
+        Predicted captcha string in uppercase, e.g. "K4PLB57A".
     """
-    return "".join([r["class_name"] for r in break_ikariam_pirate_captcha(input_image)])
+    file_bytes = input_image.read()
+    assert len(file_bytes) <= 50000, "File is too large"  # 50 KB max
+
+    blob = _preprocess(file_bytes)
+    model.setInput(blob)
+    logits = model.forward()                          # (T, 1, C)
+    return _greedy_ctc_decode(logits).upper()
