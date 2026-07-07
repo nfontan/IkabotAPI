@@ -1,19 +1,18 @@
 import time
-from fastapi import APIRouter, Request
+
+from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 
 from apps.models import HealthResponse
 
 router = APIRouter()
-templates = Jinja2Templates(directory="apps/templates")
 
 start_time = time.time()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse("home/index.html", {"request": request})
+async def home():
+    return HTMLResponse("<h1>Ikabot API</h1><p>API is running. See <a href='/docs'>/docs</a> for documentation.</p>")
 
 
 @router.get("/health", response_model=HealthResponse)
