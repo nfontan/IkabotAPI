@@ -74,7 +74,11 @@ class TokenGenerator:
                     '--disable-setuid-sandbox',
                 ]
             )
-            context = browser.new_context(user_agent=user_agent)
+            context = browser.new_context(
+                user_agent=user_agent,
+                locale='es-ES',
+                timezone_id='America/Argentina/Buenos_Aires',
+            )
             page = context.new_page()
             page.goto(self.html_file_path)
             token_element = page.wait_for_selector("body > div")
