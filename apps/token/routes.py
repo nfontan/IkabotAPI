@@ -18,6 +18,12 @@ def v1_token_route(
     user_agent: Annotated[
         str | None, Query(description="User agent string for token generation")
     ] = None,
+    locale: Annotated[
+        str | None, Query(description="Browser locale (e.g. es-ES)")
+    ] = None,
+    timezone_id: Annotated[
+        str | None, Query(description="Timezone ID (e.g. America/Argentina/Buenos_Aires)")
+    ] = None,
 ):
     try:
         if user_agent and user_agent != "" and user_agent not in supported_user_agents:
@@ -27,7 +33,11 @@ def v1_token_route(
             )
 
         start_time = time.time()
-        token_string = token_generator.get_token(user_agent)
+        token_string = token_generator.get_token(
+            user_agent=user_agent,
+            locale=locale,
+            timezone_id=timezone_id,
+        )
         processing_time = time.time() - start_time
 
         return token_string
