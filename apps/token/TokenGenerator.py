@@ -76,8 +76,8 @@ class TokenGenerator:
             )
             context = browser.new_context(
                 user_agent=user_agent,
-                locale='en-GB',
-                timezone_id='Europe/London',
+                locale='es-ES',
+                timezone_id='Europe/Madrid',
             )
             page = context.new_page()
             page.goto(self.html_file_path)
