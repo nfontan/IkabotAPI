@@ -18,24 +18,26 @@ class TokenGenerator:
         self.supported_user_agents = supported_user_agents
         self._lock = threading.Lock()
 
-    def get_token(self, user_agent: str = None):
+    def get_token(self, user_agent: str = None, locale: str = None, timezone_id: str = None):
         effective_ua = user_agent if user_agent else random.choice(self.supported_user_agents)
+        effective_locale = locale or "es-ES"
+        effective_tz = timezone_id or "America/Argentina/Buenos_Aires"
         with self._lock:
-            return self._generate_token(effective_ua)
+            return self._generate_token(effective_ua, effective_locale, effective_tz)
 
-    def _generate_token(self, user_agent: str):
+    def _generate_token(self, user_agent: str, locale: str, timezone_id: str):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
                 headless=settings.PLAYWRIGHT_HEADLESS,
                 args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
                 ]
             )
             context = browser.new_context(
                 user_agent=user_agent,
-                locale='es-ES',
-                timezone_id='America/Argentina/Buenos_Aires',
+                locale=locale,
+                timezone_id=timezone_id,
             )
             page = context.new_page()
             page.goto(self.html_file_path)
