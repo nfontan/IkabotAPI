@@ -20,7 +20,7 @@ def get_timezone_from_ip(ip: str) -> str:
     Resolve the IANA timezone ID from a public IP address.
     Uses in-memory caching and fast timeouts with fallbacks.
     """
-    default_timezone = 'America/Argentina/Buenos_Aires'
+    default_timezone = 'Europe/London'
     
     if not ip or ip in ("127.0.0.1", "localhost", "::1") or ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172.16."):
         return default_timezone
@@ -118,7 +118,7 @@ class TokenGenerator:
         Returns:
         - str: The generated token.
         """
-        effective_tz = timezone_id if timezone_id else 'America/Argentina/Buenos_Aires'
+        effective_tz = timezone_id if timezone_id else 'Europe/London'
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
                 headless=settings.PLAYWRIGHT_HEADLESS,
