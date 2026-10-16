@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -10,8 +11,8 @@ from fastapi.staticfiles import StaticFiles
 import settings
 from apps.decaptcha.routes import router as decaptcha_router
 from apps.home.routes import router as home_router
+from apps.token import token_generator
 from apps.token.routes import router as token_router
-from apps.token.routes import token_generator
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info("Ikabot API shutting down")
-    token_generator.close()
+    await asyncio.to_thread(token_generator.close)
 
 
 app = FastAPI(
